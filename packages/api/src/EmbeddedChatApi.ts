@@ -22,6 +22,9 @@ export default class EmbeddedChatApi {
   auth: RocketChatAuth;
   private _connectPromise: Promise<void> | null = null;
   private _activeSubscriptions: { stop: () => void }[] = [];
+  // Incremented by close() so that a connect() which is still awaiting
+  // can detect that it has been superseded or cancelled.
+  private _connectionGeneration = 0;
   private _authListener: ((user: any) => void) | null = null;
 
   constructor(
@@ -231,6 +234,16 @@ export default class EmbeddedChatApi {
     } catch (err: any) {
       console.error(err instanceof Error ? err.message : err);
       return err;
+    } finally {
+      // Tear down the realtime connection even if the logout request
+      // failed, otherwise the socket stays subscribed to the room and
+      // keeps receiving messages for a session that is no longer
+      // authenticated.
+      try {
+        await this.close();
+      } catch (err: any) {
+        console.error(err instanceof Error ? err.message : err);
+      }
     }
   }
 
@@ -273,16 +286,27 @@ export default class EmbeddedChatApi {
   }
 
   private async _doConnect(isChannelPrivate = false) {
+    // Take a snapshot of the generation: every close() invalidates it, so
+    // a connect() which is interrupted while awaiting (for example by a
+    // logout happening during joinRoom()) can stop before subscribing.
+    // Without this the subscriptions would be created after the socket
+    // was torn down, and the DDP client would replay them on reconnect.
+    this.close();
+    const generation = this._connectionGeneration;
+    const isStale = () => generation !== this._connectionGeneration;
     try {
-      this.close(); // before connection, all previous subscriptions should be cancelled
       await this.sdk.connection.connect();
+      if (isStale()) return;
 
       const currentUser = (await this.auth.getCurrentUser()) as any;
+      if (isStale()) return;
       const token = currentUser?.authToken || currentUser?.data?.authToken;
       if (token) {
         this._applyCredentials(currentUser);
         await this.sdk.account.loginWithToken(token);
+        if (isStale()) return;
         await this.joinRoom(isChannelPrivate);
+        if (isStale()) return;
       }
 
       // Subscribe to room messages
@@ -358,6 +382,12 @@ export default class EmbeddedChatApi {
           }
         );
         this._activeSubscriptions.push(notifyUserUiSub);
+      }
+
+      // A close() may have happened while the subscriptions above were
+      // being registered, so drop them if this connect is no longer current.
+      if (isStale()) {
+        this._stopSubscriptions();
       }
     } catch (err) {
       this.close();
@@ -551,9 +581,16 @@ export default class EmbeddedChatApi {
     }
   }
 
-  async close() {
+  private _stopSubscriptions() {
     this._activeSubscriptions.forEach((sub) => sub.stop());
     this._activeSubscriptions = [];
+  }
+
+  async close() {
+    // Invalidate any connect() which is currently in flight, so that it
+    // does not register subscriptions after this teardown.
+    this._connectionGeneration += 1;
+    this._stopSubscriptions();
     this.sdk.connection.close();
   }
 
