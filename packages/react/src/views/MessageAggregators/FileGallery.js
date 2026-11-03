@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useState, useMemo, useEffect, useCallback } from 'react';
 import { useComponentOverrides } from '@embeddedchat/ui-elements';
 import { useChannelStore, useMessageStore } from '../../store';
 import { useRCContext } from '../../context/RCInstance';
@@ -38,34 +38,25 @@ const FileGallery = () => {
     [files, text]
   );
 
-  useEffect(() => {
-    const fetchAllFiles = async () => {
-      const res = await RCInstance.getAllFiles(isChannelPrivate, '');
-      if (res?.files) {
-        const sortedFiles = res.files.sort(
-          (a, b) => new Date(b.uploadedAt) - new Date(a.uploadedAt)
-        );
-        setFiles(sortedFiles);
-        setIsFetching(false);
-      }
-    };
-    fetchAllFiles();
-  }, [RCInstance, isChannelPrivate, messages]);
-
-  const handleFilterSelect = async (val) => {
+  const fetchFiles = useCallback(async () => {
     setIsFetching(true);
-    setSelectedFilter(val);
-    let res;
-    val === 'all'
-      ? (res = await RCInstance.getAllFiles(isChannelPrivate, ''))
-      : (res = await RCInstance.getAllFiles(isChannelPrivate, val));
+    const typeGroup = selectedFilter === 'all' ? '' : selectedFilter;
+    const res = await RCInstance.getAllFiles(isChannelPrivate, typeGroup);
     if (res?.files) {
       const sortedFiles = res.files.sort(
         (a, b) => new Date(b.uploadedAt) - new Date(a.uploadedAt)
       );
       setFiles(sortedFiles);
-      setIsFetching(false);
     }
+    setIsFetching(false);
+  }, [RCInstance, isChannelPrivate, selectedFilter]);
+
+  useEffect(() => {
+    fetchFiles();
+  }, [fetchFiles, messages]);
+
+  const handleFilterSelect = (val) => {
+    setSelectedFilter(val);
   };
 
   return (
@@ -88,6 +79,7 @@ const FileGallery = () => {
       shouldRender={(file) => file.path}
       type="file"
       searchFiltered={filteredFiles}
+      onDeleteFile={fetchFiles}
       viewType={viewType}
     />
   );

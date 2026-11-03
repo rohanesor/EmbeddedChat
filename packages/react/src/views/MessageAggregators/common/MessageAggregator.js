@@ -30,6 +30,7 @@ export const MessageAggregator = ({
   filterProps,
   searchProps,
   searchFiltered,
+  onDeleteFile,
   fetching,
   type = 'message',
   viewType = 'Sidebar',
@@ -185,6 +186,7 @@ export const MessageAggregator = ({
                     <FileDisplay
                       key={`${msg._id}-aggregated`}
                       fileMessage={msg}
+                      onDeleteFile={onDeleteFile}
                     />
                   ) : (
                     <Box

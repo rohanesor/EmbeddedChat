@@ -68,6 +68,7 @@ const FileMessage = ({ fileMessage, onDeleteFile }) => {
           const res = await RCInstance.deleteMessage(message._id);
           setFileToDelete({});
           if (res.success) {
+            onDeleteFile?.();
             dispatchToastMessage({
               type: 'success',
               message: 'File deleted',
@@ -81,7 +82,7 @@ const FileMessage = ({ fileMessage, onDeleteFile }) => {
         }
       });
     },
-    [messages, RCInstance, dispatchToastMessage]
+    [messages, RCInstance, dispatchToastMessage, onDeleteFile]
   );
   useEffect(() => {
     const fetchAllFiles = async () => {
