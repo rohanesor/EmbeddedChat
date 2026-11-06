@@ -48,7 +48,7 @@ const ChatBody = ({
   const styles = getChatbodyStyles(theme, mode);
   const [scrollPosition, setScrollPosition] = useState(0);
   const [popupVisible, setPopupVisible] = useState(false);
-  const [, setIsUserScrolledUp] = useState(false);
+  const [isUserScrolledUp, setIsUserScrolledUp] = useState(false);
   const [otherUserMessage, setOtherUserMessage] = useState(false);
   const [isOverflowing, setIsOverflowing] = useState(false);
   const [firstUnreadMessageId, setFirstUnreadMessageId] = useState(null);
@@ -308,10 +308,10 @@ const ChatBody = ({
   };
 
   useEffect(() => {
-    if (messageListRef.current) {
+    if (messageListRef.current && !isUserScrolledUp) {
       messageListRef.current.scrollTop = messageListRef.current.scrollHeight;
     }
-  }, [messages, channelCatchUps, threadCatchUps]);
+  }, [messages, channelCatchUps, threadCatchUps, isUserScrolledUp]);
 
   useEffect(() => {
     checkOverflow();
